@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="dark-content">
     <meta name="theme-color" content="#2196f3">
     <title>Gyroscope PWA</title>
     <link rel="manifest" href="#manifest">
@@ -346,6 +349,8 @@
         
         const iconURL = canvas.toDataURL();
         document.querySelector('link[rel="apple-touch-icon"]').href = iconURL;
+
+        window.matchMedia('(display-mode: standalone)').matches
     </script>
 </body>
 </html>
