@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196f3">
+    <title>Gyroscope PWA</title>
+    <link rel="manifest" href="#manifest">
+    <link rel="apple-touch-icon" href="#icon">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+            color: #333;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #2196f3;
+            text-align: center;
+        }
+        
+        .readings {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .reading-card {
+            background-color: #f0f8ff;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #0d47a1;
+        }
+        
+        .visualization {
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+            position: relative;
+            perspective: 500px;
+        }
+        
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+        }
+        
+        .cube div {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .front { 
+            background-color: rgba(255, 0, 0, 0.7);
+            transform: translateZ(100px);
+        }
+        
+        .back { 
+            background-color: rgba(0, 255, 0, 0.7);
+            transform: rotateY(180deg) translateZ(100px);
+        }
+        
+        .right { 
+            background-color: rgba(0, 0, 255, 0.7);
+            transform: rotateY(90deg) translateZ(100px);
+        }
+        
+        .left { 
+            background-color: rgba(255, 255, 0, 0.7);
+            transform: rotateY(-90deg) translateZ(100px);
+        }
+        
+        .top { 
+            background-color: rgba(255, 0, 255, 0.7);
+            transform: rotateX(90deg) translateZ(100px);
+        }
+        
+        .bottom { 
+            background-color: rgba(0, 255, 255, 0.7);
+            transform: rotateX(-90deg) translateZ(100px);
+        }
+        
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 12px 24px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0d8aee;
+        }
+        
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .permission-required {
+            background-color: #fff3cd;
+            border: 1px solid #ffecb5;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gyroscope PWA</h1>
+        
+        <div class="permission-required" id="permission-message">
+            <p>On iOS 13+, you need to enable the gyroscope and accelerometer in Settings.</p>
+            <p>Go to: Settings > Safari > Motion & Orientation Access</p>
+        </div>
+        
+        <button id="start-button">Start Gyroscope</button>
+        
+        <div class="status" id="status">Waiting to start...</div>
+        
+        <div class="readings">
+            <div class="reading-card">
+                <h3>Alpha (Z)</h3>
+                <div class="value" id="alpha-value">0°</div>
+            </div>
+            <div class="reading-card">
+                <h3>Beta (X)</h3>
+                <div class="value" id="beta-value">0°</div>
+            </div>
+            <div class="reading-card">
+                <h3>Gamma (Y)</h3>
+                <div class="value" id="gamma-value">0°</div>
+            </div>
+        </div>
+        
+        <div class="visualization">
+            <div class="cube" id="cube">
+                <div class="front">Front</div>
+                <div class="back">Back</div>
+                <div class="right">Right</div>
+                <div class="left">Left</div>
+                <div class="top">Top</div>
+                <div class="bottom">Bottom</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Check if the browser supports service workers
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered with scope:', reg.scope))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
+        
+        // Variables to track gyroscope status
+        let gyroscopeRunning = false;
+        const startButton = document.getElementById('start-button');
+        const statusElement = document.getElementById('status');
+        const permissionMessage = document.getElementById('permission-message');
+        const cube = document.getElementById('cube');
+        
+        // Event listener for the start button
+        startButton.addEventListener('click', () => {
+            if (!gyroscopeRunning) {
+                startGyroscope();
+            } else {
+                stopGyroscope();
+            }
+        });
+        
+        // Function to request and start gyroscope
+        function startGyroscope() {
+            // Check if DeviceOrientationEvent is available
+            if (window.DeviceOrientationEvent) {
+                // For iOS 13+ devices that need permission
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                enableGyroscope();
+                            } else {
+                                statusElement.textContent = 'Permission denied for gyroscope access.';
+                                permissionMessage.style.display = 'block';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error requesting gyroscope permission:', error);
+                            statusElement.textContent = 'Error requesting permission. Try opening this page from Safari.';
+                            permissionMessage.style.display = 'block';
+                        });
+                } else {
+                    // For non-iOS or older iOS devices that don't need permission
+                    enableGyroscope();
+                }
+            } else {
+                statusElement.textContent = 'Your device does not support gyroscope access.';
+            }
+        }
+        
+        // Function to enable gyroscope after permission is granted
+        function enableGyroscope() {
+            window.addEventListener('deviceorientation', handleOrientation);
+            gyroscopeRunning = true;
+            startButton.textContent = 'Stop Gyroscope';
+            statusElement.textContent = 'Gyroscope active';
+        }
+        
+        // Function to stop gyroscope
+        function stopGyroscope() {
+            window.removeEventListener('deviceorientation', handleOrientation);
+            gyroscopeRunning = false;
+            startButton.textContent = 'Start Gyroscope';
+            statusElement.textContent = 'Gyroscope stopped';
+        }
+        
+        // Function to handle orientation data
+        function handleOrientation(event) {
+            // Update text values
+            document.getElementById('alpha-value').textContent = Math.round(event.alpha) + '°';
+            document.getElementById('beta-value').textContent = Math.round(event.beta) + '°';
+            document.getElementById('gamma-value').textContent = Math.round(event.gamma) + '°';
+            
+            // Update 3D cube visualization
+            cube.style.transform = `rotateX(${event.beta}deg) rotateY(${event.gamma}deg) rotateZ(${event.alpha}deg)`;
+        }
+        
+        // Create necessary PWA files dynamically
+        
+        // Create manifest file
+        const manifestBlob = new Blob([`
+            {
+                "name": "Gyroscope PWA",
+                "short_name": "Gyroscope",
+                "description": "A PWA that accesses device gyroscope",
+                "start_url": "./index.html",
+                "display": "standalone",
+                "background_color": "#f5f5f7",
+                "theme_color": "#2196f3",
+                "icons": [
+                    {
+                        "src": "icon-192.png",
+                        "sizes": "192x192",
+                        "type": "image/png"
+                    },
+                    {
+                        "src": "icon-512.png",
+                        "sizes": "512x512",
+                        "type": "image/png"
+                    }
+                ]
+            }
+        `], {type: 'application/json'});
+        
+        // Create service worker file
+        const swBlob = new Blob([`
+            const CACHE_NAME = 'gyroscope-pwa-v1';
+            const urlsToCache = [
+                './',
+                './index.html',
+                './manifest.json',
+                './icon-192.png',
+                './icon-512.png'
+            ];
+            
+            self.addEventListener('install', event => {
+                event.waitUntil(
+                    caches.open(CACHE_NAME)
+                        .then(cache => {
+                            return cache.addAll(urlsToCache);
+                        })
+                );
+            });
+            
+            self.addEventListener('fetch', event => {
+                event.respondWith(
+                    caches.match(event.request)
+                        .then(response => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request);
+                        })
+                );
+            });
+        `], {type: 'text/javascript'});
+
+        // Set up links for manifest and service worker
+        const manifestURL = URL.createObjectURL(manifestBlob);
+        document.querySelector('link[rel="manifest"]').href = manifestURL;
+        
+        // Create and link a simple icon
+        const canvas = document.createElement('canvas');
+        canvas.width = 192;
+        canvas.height = 192;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw a simple icon
+        ctx.fillStyle = '#2196f3';
+        ctx.fillRect(0, 0, 192, 192);
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 100px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('G', 96, 96);
+        
+        const iconURL = canvas.toDataURL();
+        document.querySelector('link[rel="apple-touch-icon"]').href = iconURL;
+    </script>
+</body>
+</html>
